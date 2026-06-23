@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>心情日记</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="container header-inner">
+    <a href="/" class="logo">
+      <span class="logo-mark"></span>
+      心情日记
+    </a>
+    <nav>
+      {% if session.admin %}
+        <a href="/admin">管理</a>
+        <a href="/logout">退出</a>
+      {% else %}
+        <a href="/login">管理员</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+<footer class="footer">
+  <div class="container">
+    <span>记录每一天的心情</span>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="admin-head">
+  <h2>记录心情</h2>
+  <a href="/" class="btn btn-outline">返回首页</a>
+</div>
+
+<div class="record-card">
+  <div class="record-card-head">
+    <span class="live-dot"></span>
+    <div>
+      <h3>{{ '今日记录' if selected_date == today and not today_mood else '编辑记录' if today_mood else '今日记录' }}</h3>
+      <div class="head-sub">{{ selected_date.strftime('%Y年%m月%d日') }}</div>
+    </div>
+  </div>
+
+  <form method="POST" class="mood-form">
+    <div class="form-group">
+      <label>日期</label>
+      <input type="date" name="date" value="{{ selected_date.isoformat() }}" class="input-date">
+    </div>
+
+    <div class="form-group">
+      <label>你现在感觉如何？</label>
+      <div class="mood-spectrum" id="moodSpectrum">
+        {% for s in [-3, -2, -1, 0, 1, 2, 3] %}
+        <label class="spectrum-item {% if today_mood and today_mood.score == s %}active{% endif %}">
+          <input type="radio" name="score" value="{{ s }}" {% if today_mood and today_mood.score == s %}checked{% endif %}{% if not today_mood and s == 0 %} checked{% endif %}>
+          <span class="spectrum-dot score-{{ s }}"></span>
+          <span class="spectrum-label">{{ score_labels[s] }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>情绪标签 <span style="font-weight:400;color:var(--text-faint)">· 可多选</span></label>
+      <div class="tag-grid">
+        {% for t in tag_options %}
+        {% set checked = today_mood and t in today_mood.tags %}
+        <label class="tag-select {{ 'active' if checked else '' }}">
+          <input type="checkbox" name="tags" value="{{ t }}" {% if checked %}checked{% endif %}>
+          {{ t }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="note">备注 <span style="font-weight:400;color:var(--text-faint)">· 可选</span></label>
+      <textarea id="note" name="note" rows="3" placeholder="今天发生了什么...">{{ today_mood.note if today_mood else '' }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg btn-block">
+      {{ '更新记录' if today_mood else '保存记录' }}
+    </button>
+  </form>
+</div>
+
+{% if recent_moods %}
+<div class="recent-section">
+  <h3>近期记录</h3>
+  <table class="mood-table">
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>状态</th>
+        <th>标签</th>
+        <th>备注</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in recent_moods %}
+      <tr>
+        <td>{{ m.date }}</td>
+        <td><span class="mood-badge score-{{ m.score }}">{{ score_labels[m.score] }}</span></td>
+        <td>
+          <div class="tag-chips-sm">
+            {% for t in m.tags %}<span class="tag-chip-sm">{{ t }}</span>{% endfor %}
+          </div>
+        </td>
+        <td class="note-cell">{{ m.note[:50] }}{% if m.note|length > 50 %}...{% endif %}</td>
+        <td>
+          <a href="/admin?edit_date={{ m.date }}" class="btn-sm btn-edit">编辑</a>
+          <form method="POST" action="/admin/delete/{{ m.id }}" style="display:inline" onsubmit="return confirm('确定删除 {{ m.date }} 的记录?')">
+            <button type="submit" class="btn-sm btn-delete">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

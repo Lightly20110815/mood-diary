@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">心情概览</h1>
+<p class="page-subtitle">{{ today.strftime('%Y年%m月%d日') }}</p>
+
+<div class="stats-row">
+  <div class="stat-card week">
+    <div class="stat-label">本周均值</div>
+    <div class="stat-value">
+      {% if week_avg is not none %}{{ week_avg }}{% else %}--{% endif %}
+    </div>
+    <div class="stat-sub">记录 {{ week_count }}/7 天
+      {% if prev_week_avg is not none and week_avg is not none %}
+        {% if week_avg > prev_week_avg %}
+          <span class="trend up">&uarr; {{ '%.1f'|format(week_avg - prev_week_avg) }}</span>
+        {% elif week_avg < prev_week_avg %}
+          <span class="trend down">&darr; {{ '%.1f'|format(prev_week_avg - week_avg) }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card month">
+    <div class="stat-label">本月均值</div>
+    <div class="stat-value">
+      {% if month_avg is not none %}{{ month_avg }}{% else %}--{% endif %}
+    </div>
+    <div class="stat-sub">记录 {{ month_count }}/{{ month_possible }} 天</div>
+  </div>
+  <div class="stat-card today">
+    <div class="stat-label">今日心情</div>
+    {% set today_mood = all_moods | selectattr('date', 'equalto', today.isoformat()) | list %}
+    {% if today_mood %}
+      <div class="stat-value small">{{ score_labels[today_mood[0].score] }}</div>
+      <div class="stat-sub">
+        {% for t in today_mood[0].tags %}<span class="tag-chip">{{ t }}</span>{% endfor %}
+        {% if not today_mood[0].tags %}已记录{% endif %}
+      </div>
+    {% else %}
+      <div class="stat-value small" style="color:var(--text-faint)">未记录</div>
+      <div class="stat-sub">今天还未记录</div>
+    {% endif %}
+  </div>
+</div>
+
+<section class="section">
+  <div class="section-head">
+    <h3>本周心情</h3>
+    <span class="section-meta">每天得分</span>
+  </div>
+  <div class="chart-card">
+    <div class="chart-wrap">
+      <canvas id="weekChart"></canvas>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <h3>月度日历</h3>
+    <span class="section-meta">{{ today.strftime('%Y年%m月') }}</span>
+  </div>
+  <div class="calendar-legend">
+    {% for s in [-3, -2, -1, 0, 1, 2, 3] %}
+      <span class="cal-legend-item">
+        <span class="cal-cell score-{{ s }}"></span>{{ score_labels[s] }}
+      </span>
+    {% endfor %}
+  </div>
+  <div class="calendar-grid">
+    <div class="cal-header">一</div><div class="cal-header">二</div><div class="cal-header">三</div>
+    <div class="cal-header">四</div><div class="cal-header">五</div><div class="cal-header">六</div><div class="cal-header">日</div>
+    {% for _ in range(cal_padding | length) %}<div class="cal-cell empty"></div>{% endfor %}
+    {% for d in cal_days %}
+      {% set s = month_scores_map.get(d) %}
+      <div class="cal-cell {% if s is not none %}score-{{ s }} has-score{% else %}empty{% endif %}{% if d == today.day %} today-ring{% endif %}" title="{{ today.year }}-{{ '%02d'|format(today.month) }}-{{ '%02d'|format(d) }}{% if s is not none %} · {{ score_labels[s] }}{% endif %}">
+        {{ d }}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <h3>近期趋势</h3>
+    <span class="section-meta">最近 8 周均值</span>
+  </div>
+  <div class="chart-card">
+    <div class="chart-wrap">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+</section>
+
+{% if tag_counts %}
+<section class="section">
+  <div class="section-head">
+    <h3>情绪标签</h3>
+    <span class="section-meta">本月分布</span>
+  </div>
+  <div class="chart-card">
+    <div class="chart-wrap tall">
+      <canvas id="tagChart"></canvas>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="section-head">
+    <h3>心情记录</h3>
+    <span class="section-meta">最近 {{ all_moods|length }} 条</span>
+  </div>
+  <div class="timeline">
+    {% for m in all_moods %}
+    <div class="timeline-item">
+      <div class="timeline-dot score-{{ m.score }}"></div>
+      <div class="timeline-body">
+        <div class="timeline-date">{{ m.date }}</div>
+        <div class="timeline-content">
+          <span class="mood-label score-{{ m.score }}">{{ score_labels[m.score] }}</span>
+          {% if m.tags %}
+            <span class="mood-tags">
+              {% for t in m.tags %}<span class="tag-chip">{{ t }}</span>{% endfor %}
+            </span>
+          {% endif %}
+          {% if m.note %}<span class="mood-note">{{ m.note }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="empty-msg">还没有记录，去登录添加第一条吧</p>
+    {% endfor %}
+  </div>
+</section>
+
+<script>
+(function() {
+  var scoreColors = {
+    '-3': '#5B7C99', '-2': '#7E97AE', '-1': '#A8B7C7',
+    '0':  '#C9C5BE',
+    '1':  '#D9C77D', '2':  '#D89A66', '3':  '#D17A5A'
+  };
+  var scoreLabels = {
+    '-3':'非常不愉快','-2':'不愉快','-1':'略不愉快',
+    '0':'中性','1':'略愉快','2':'愉快','3':'非常愉快'
+  };
+  var ink = '#A1A1AA';
+  var grid = '#F0F0F1';
+  var tip = { backgroundColor: '#18181B', padding: 10, cornerRadius: 8, titleFont: { size: 12 }, bodyFont: { size: 12 }, displayColors: false };
+
+  var ctx1 = document.getElementById('weekChart').getContext('2d');
+  new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: {{ week_labels | tojson }},
+      datasets: [{
+        data: {{ week_scores | tojson }},
+        backgroundColor: function(ctx) {
+          var v = ctx.raw;
+          if (v === null || v === undefined) return '#F0F0F1';
+          return scoreColors[String(v)];
+        },
+        borderRadius: 5,
+        borderSkipped: false,
+        maxBarThickness: 38,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: Object.assign({}, tip, { callbacks: { label: function(c) { return c.raw === null ? '未记录' : scoreLabels[String(c.raw)]; } } })
+      },
+      scales: {
+        y: { min: -3, max: 3, ticks: { stepSize: 1, color: ink, font: { size: 10 }, callback: function(v) { return scoreLabels[String(v)] || ''; } }, grid: { color: grid } },
+        x: { ticks: { color: ink, font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  var ctx2 = document.getElementById('trendChart').getContext('2d');
+  var gradient = ctx2.createLinearGradient(0, 0, 0, 220);
+  gradient.addColorStop(0, 'rgba(209,122,90,0.14)');
+  gradient.addColorStop(1, 'rgba(209,122,90,0)');
+  new Chart(ctx2, {
+    type: 'line',
+    data: {
+      labels: {{ weekly_trend_labels | tojson }},
+      datasets: [{
+        data: {{ weekly_trend_avgs | tojson }},
+        borderColor: '#D17A5A',
+        backgroundColor: gradient,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#D17A5A',
+        pointBorderColor: '#FFFFFF',
+        pointBorderWidth: 2,
+        borderWidth: 2.5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: Object.assign({}, tip, { callbacks: { label: function(c) { return c.raw === null ? '无数据' : '周均: ' + c.raw; } } })
+      },
+      scales: {
+        y: { min: -3, max: 3, ticks: { stepSize: 1, color: ink, font: { size: 10 }, callback: function(v) { return scoreLabels[String(v)] || ''; } }, grid: { color: grid } },
+        x: { ticks: { color: ink, font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  {% if tag_counts %}
+  var ctx3 = document.getElementById('tagChart').getContext('2d');
+  var tagData = {{ tag_counts | tojson }};
+  new Chart(ctx3, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(tagData),
+      datasets: [{
+        data: Object.values(tagData),
+        backgroundColor: [
+          '#5B7C99','#7E97AE','#A8B7C7','#C9C5BE','#D9C77D','#D89A66',
+          '#D17A5A','#B8B7C0','#9CA3AF','#A1A1AA','#D6D3D1','#E4E4E7',
+        ],
+        borderColor: '#FFFFFF',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '66%',
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 12 }, color: '#3F3F46', padding: 12, usePointStyle: true, pointStyle: 'circle', boxWidth: 8 } }
+      }
+    }
+  });
+  {% endif %}
+})();
+</script>
+
+{% endblock %}
