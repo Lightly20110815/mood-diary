@@ -1,3 +1,4 @@
+import hmac
 import json
 from datetime import date, datetime, timedelta
 from functools import wraps
@@ -144,8 +145,19 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    admin_password = app.config.get('ADMIN_PASSWORD')
+    if not admin_password:
+        return render_template(
+            'login.html',
+            error='管理员密码未设置，登录功能已禁用。请在环境变量中配置 ADMIN_PASSWORD。',
+        )
+
     if request.method == 'POST':
-        if request.form.get('password') == app.config['ADMIN_PASSWORD']:
+        user_password = request.form.get('password', '')
+        if user_password and hmac.compare_digest(
+            user_password.encode('utf-8'),
+            admin_password.encode('utf-8'),
+        ):
             session['admin'] = True
             return redirect(url_for('admin'))
         return render_template('login.html', error='密码错误')

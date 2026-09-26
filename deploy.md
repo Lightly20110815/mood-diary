@@ -27,16 +27,19 @@ git push -u origin main
 1. Vercel 控制台 → Storage → Create Database → Postgres
 2. 创建后进入数据库设置页，环境变量会自动注入到项目中
 
-## 4. 配置环境变量
+## 4. 配置环境变量（必填）
+
+在 Vercel 或生产环境中，**必须**配置以下环境变量。如果缺少任何一个，应用在启动时将直接报错并拒绝运行（防止使用默认弱口令的安全隐患）：
 
 Vercel → Project → Settings → Environment Variables，添加：
 
-| Key | Value |
-|---|---|
-| `SECRET_KEY` | 随机字符串（可用 `openssl rand -hex 32` 生成）|
-| `ADMIN_PASSWORD` | 你的管理员密码 |
+| Key | 是否必填 | 说明与示例 |
+|---|---|---|
+| `SECRET_KEY` | **必填** | 强随机安全密钥（可用终端运行 `openssl rand -hex 32` 生成） |
+| `ADMIN_PASSWORD` | **必填** | 后台管理员登录密码（严禁使用简单或默认密码） |
 
 > `POSTGRES_URL` 等数据库连接变量由 Vercel Postgres 自动注入，无需手动添加。
+> 本地开发模式下：若未设置 `ADMIN_PASSWORD`，登录路由将自动禁用并提示设置；`SECRET_KEY` 会在每次进程启动时生成随机密钥。任何环境都不会采用弱默认密码。
 
 ## 5. 部署
 
