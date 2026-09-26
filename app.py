@@ -154,7 +154,10 @@ def login():
 
     if request.method == 'POST':
         user_password = request.form.get('password', '')
-        if user_password and hmac.compare_digest(user_password, admin_password):
+        if user_password and hmac.compare_digest(
+            user_password.encode('utf-8'),
+            admin_password.encode('utf-8'),
+        ):
             session['admin'] = True
             return redirect(url_for('admin'))
         return render_template('login.html', error='密码错误')

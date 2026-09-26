@@ -91,6 +91,46 @@ def test_auth_success_and_failure():
         Config.reload()
 
 
+def test_non_ascii_passwords():
+    old_env = dict(os.environ)
+    try:
+        # 1. Non-ASCII wrong password submitted
+        os.environ['SECRET_KEY'] = 'test-secret'
+        os.environ['ADMIN_PASSWORD'] = 'ascii_secret_password'
+        Config.reload()
+
+        from app import app
+        app.config['SECRET_KEY'] = 'test-secret'
+        app.config['ADMIN_PASSWORD'] = 'ascii_secret_password'
+
+        client = app.test_client()
+
+        # Non-ASCII password should return 200 with error message without throwing TypeError / 500
+        resp_wrong = client.post('/login', data={'password': '输入「密码」这类密码'})
+        assert resp_wrong.status_code == 200
+        assert "密码错误" in resp_wrong.get_data(as_text=True)
+
+        # 2. Chinese ADMIN_PASSWORD with correct password
+        chinese_admin_pwd = '我的管理员密码中文'
+        os.environ['ADMIN_PASSWORD'] = chinese_admin_pwd
+        Config.reload()
+        app.config['ADMIN_PASSWORD'] = chinese_admin_pwd
+
+        # Wrong attempt
+        resp_wrong2 = client.post('/login', data={'password': '错误密码'})
+        assert resp_wrong2.status_code == 200
+        assert "密码错误" in resp_wrong2.get_data(as_text=True)
+
+        # Correct attempt logs in
+        resp_correct = client.post('/login', data={'password': chinese_admin_pwd})
+        assert resp_correct.status_code == 302
+        assert '/admin' in resp_correct.headers['Location']
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+        Config.reload()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
